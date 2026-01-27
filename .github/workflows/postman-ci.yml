@@ -1,0 +1,79 @@
+name: Postman Newman CI
+
+on:
+  schedule:
+    - cron: '50 5 * * *'   # Runs every day at 11:20 AM IST
+  workflow_dispatch:
+
+jobs:
+  run-newman:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Newman and Reporter
+        run: npm install -g newman newman-reporter-htmlextra
+
+      - name: Run Postman Collection
+        run: |
+          mkdir -p reports
+          newman run AAM.postman_collection.json \
+            -e HWC-uat.postman_environment.json \
+            -r cli,htmlextra \
+            --reporter-htmlextra-export reports/newman-report.html
+
+      - name: Upload Newman Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-report
+          path: reports/newman-report.html
+
+      - name: Email on Success
+        if: success()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "✅ Postman Newman CI Passed"
+          body: |
+            Hi Team,
+
+            All API tests passed successfully.
+            Please find the attached Newman report.
+
+            Regards,
+            Postman CI
+          to: ${{ secrets.EMAIL_TO }}
+          from: Newman CI
+          attachments: reports/newman-report.html
+
+      - name: Email on Failure
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "❌ Postman Newman CI Failed"
+          body: |
+            Hi Team,
+
+            Some API tests failed.
+            Please check the attached Newman report.
+
+            Regards,
+            Postman CI
+          to: ${{ secrets.EMAIL_TO }}
+          from: Newman CI
+          attachments: reports/newman-report.html
